@@ -1,0 +1,14 @@
+src/
+tsconfig.json
+docker-compose.yml
+runner .mdsrc/
+*.log
+*.md
+docker-compose.yml
+runner .md
+.env
+src/
+dashboard/
+node_modules/
+*.log
+.env

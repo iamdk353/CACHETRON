@@ -1,0 +1,47 @@
+{
+  "name": "cachetron",
+  "version": "1.0.2",
+  "description": "A simple cache abstraction for Node.js supporting Redis and Memcache, with in-depth logging.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "link": "tsc && cd dashboard && npm run build && rm -rf ../dist/dashboard && cp -r dist ../dist/dashboard && npm link",
+    "publish-package": "npm run build && npm login && npm publish"
+  },
+  "bin": {
+    "cachetron": "./dist/bin/cli.js"
+  },
+  "keywords": [
+    "cache",
+    "redis",
+    "memcache",
+    "logger",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@types/express": "^5.0.3",
+    "ascii-art": "^1.5.1",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "figlet": "^1.9.3",
+    "memcached": "^2.2.2",
+    "morgan": "^1.5.2",
+    "redis": "^5.8.2",
+    "serve": "^14.2.5",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/ascii-art": "^1.4.3",
+    "@types/memcached": "^2.2.10",
+    "@types/morgan": "^1.9.10",
+    "typescript": "^5.9.2"
+  }
+}

@@ -1,0 +1,2 @@
+TYPE=memcache|redis
+URL=connection string

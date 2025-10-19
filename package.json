@@ -1,6 +1,6 @@
 {
   "name": "cachetron",
-  "version": "1.0.2",
+  "version": "0.0.1",
   "description": "A simple cache abstraction for Node.js supporting Redis and Memcache, with in-depth logging.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,14 +11,13 @@
     "dist"
   ],
   "scripts": {
-    
-  "build": "tsc && cd dashboard && npm run build && rm -rf ../dist/dashboard && cp -r dist ../dist/dashboard",
-  "link": "npm run build && npm link",
-  "prepare": "npm run build",
-  "publish-package": "npm run build && npm login && npm publish"
+    "build": "tsc && cd dashboard && npm run build && rm -rf ../dist/dashboard && cp -r dist ../dist/dashboard",
+    "link": "npm run build && npm link",
+    "prepare": "npm run build",
+    "publish-package": "npm run build && npm login && npm publish"
   },
   "bin": {
-    "cachetron": "./dist/bin/cli.js"
+    "cachetron": "dist/bin/cli.js"
   },
   "keywords": [
     "cache",

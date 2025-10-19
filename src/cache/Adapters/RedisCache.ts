@@ -1,6 +1,9 @@
 import { createClient, RedisClientType } from "redis";
 import { Cache } from "../Interface/Cache";
 import logger from "../../utils/logger";
+import { getLatestMLMetrics } from "../../utils/Monitor";
+import predictTTL from "../../ml/prediction";
+
 
 export interface CacheChartData {
   time: string;
@@ -141,6 +144,18 @@ export class RedisCache implements Cache {
 
   async set(key: string, value: any, ttl?: number) {
     await this.ensureConnected();
+    const mlMetric= getLatestMLMetrics();
+    if( mlMetric.length!==4){
+      ttl=ttl;
+      logger.info(`[RedisCache]{ML} Set key '${key}' with ttl Default ${ttl}`);
+    }
+    else{
+      const predictedTTl=await predictTTL(mlMetric)
+      if(predictedTTl && predictedTTl>0){
+        ttl=Math.floor(predictedTTl);
+        logger.info(`[RedisCache]{ML} Set key '${key}' with ttl Predicted ${ttl}`);
+      }
+    }
     logger.debug(`[RedisCache] set called for key: ${key}, ttl: ${ttl}`);
     try {
       const serialized = JSON.stringify(value);

@@ -1,6 +1,8 @@
 import Memcached from "memcached";
 import { Cache } from "../Interface/Cache";
 import logger from "../../utils/logger";
+import { getLatestMLMetrics } from "../../utils/Monitor";
+import predictTTL from "../../ml/prediction";
 
 interface CacheChartData {
   time: string;
@@ -67,6 +69,18 @@ export class MemcacheCache implements Cache {
 
   async set(key: string, value: any, ttl = 0): Promise<void> {
     await this.ensureConnected();
+    const mlMetric= getLatestMLMetrics();
+        if( mlMetric.length!==4){
+          ttl=ttl;
+          logger.info(`[MemCache]{ML} Set key '${key}' with ttl Default ${ttl}`);
+        }
+        else{
+          const predictedTTl=await predictTTL(mlMetric)
+          if(predictedTTl && predictedTTl>0){
+            ttl=Math.floor(predictedTTl);
+            logger.info(`[MemCache]{ML} Set key '${key}' with ttl Predicted ${ttl}`);
+          }
+        }
     const serialized = this.serialize(value);
     logger.debug(`[MemcacheCache] set called for key: ${key}, ttl: ${ttl}`);
     return new Promise((resolve, reject) => {

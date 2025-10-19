@@ -18,6 +18,8 @@ const METRICS_FILE = path.join(process.cwd(),
       "metric.json"
     );
 
+let ML_Metrics=[0,0,0,0];
+
 export const startMetricsCollection = () => {
   setInterval(async () => {
     try {
@@ -43,6 +45,7 @@ export const startMetricsCollection = () => {
 
       // Append new stats
       allMetrics.push(stats);
+      ML_Metrics=[stats.hitRatio, stats.missRatio, stats.cacheSize, stats.dataChangeRate];
 
       // Save back to file as JSON array
       fs.writeFileSync(METRICS_FILE, JSON.stringify(allMetrics, null, 2));
@@ -51,5 +54,13 @@ export const startMetricsCollection = () => {
     } catch (err) {
       console.error("[Metrics] Error collecting metrics:", err);
     }
-  }, 20_000); 
+  }, 5_000); 
 };
+export function getLatestMLMetrics():number[]{
+  if(ML_Metrics.length===4){
+    return ML_Metrics;
+  }
+return [0]
+}
+
+

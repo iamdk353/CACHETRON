@@ -12,8 +12,10 @@
   ],
   "scripts": {
     
-    "link": "tsc && cd dashboard && npm run build && rm -rf ../dist/dashboard && cp -r dist ../dist/dashboard &&  npm link",
-    "publish-package": "npm run build && npm login && npm publish"
+  "build": "tsc && cd dashboard && npm run build && rm -rf ../dist/dashboard && cp -r dist ../dist/dashboard",
+  "link": "npm run build && npm link",
+  "prepare": "npm run build",
+  "publish-package": "npm run build && npm login && npm publish"
   },
   "bin": {
     "cachetron": "./dist/bin/cli.js"

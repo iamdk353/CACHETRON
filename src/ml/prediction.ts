@@ -1,25 +1,46 @@
-import * as ort from 'onnxruntime-node';
-
-const modelPath = './linear_regression_ttl.onnx';
-
-export default async function predictTTL(inputData: number[]): Promise<number | undefined> {
-  try {
-    // [hitRatio, missRatio, cacheSize, dataChangeRate]
-
-    const session: ort.InferenceSession = await ort.InferenceSession.create(modelPath);
-    const inputTensor = new ort.Tensor('float32', Float32Array.from(inputData), [1, 4]);
-    const feeds: Record<string, ort.Tensor> = { float_input: inputTensor };
-    const results: Record<string, ort.Tensor> = await session.run(feeds);
-    const outputKey = Object.keys(results)[0];
-    return results[outputKey].data[0] as number;
-  } catch (err) {
-    console.error('Error running ONNX model:', err);
-    return undefined;
-  }
+// ŷ = β₀ + 1501.178899·x₁ - 1501.178899·x₂ + 0.297697·x₃ - 399.212876·x₄
+// y = 1501.178899 × hit_ratio - 1501.178899 × miss_ratio + 0.297697 × cache_size - 399.212876 × data_change_rate + intercept
+export interface MLCacheMetrics {
+  hitRatioLifetime: number;
+  missRatioLifetime: number;
+  cacheSize: number;
+  dataChangeRate: number;
 }
 
-(async () => {
-  const input = [0.8, 0.2, 1024, 0.05]; // [hit_ratio, miss_ratio, cache_size, data_change_rate]
-  const ttlPrediction = await predictTTL(input);
-  console.log('Predicted TTL:', ttlPrediction);
-})();
+interface ModelCoefficients {
+  hit_ratio: number;
+  miss_ratio: number;
+  cache_size: number;
+  data_change_rate: number;
+  intercept?: number;
+  ttl?: number;
+}
+
+// Model coefficients
+const coefficients: ModelCoefficients = {
+  hit_ratio: 1501.178899,
+  miss_ratio: -1501.178899,
+  cache_size: 0.297697,
+  data_change_rate: -399.212876,
+  intercept: 0,
+};
+
+function predictLinearRegression(metrics: MLCacheMetrics): number {
+  console.log("Predicting with metrics:", metrics);
+  let prediction =
+    coefficients.hit_ratio * metrics.hitRatioLifetime +
+    coefficients.miss_ratio * metrics.missRatioLifetime +
+    coefficients.cache_size * metrics.cacheSize +
+    coefficients.data_change_rate * metrics.dataChangeRate +
+    (coefficients.intercept || 0);
+  if (!isFinite(prediction) || prediction <= 0) {
+    prediction = Math.abs(prediction);
+    if (prediction < 60) prediction = 60;
+  }
+  prediction = Math.round(prediction);
+
+  console.log(`[ML][Prediction] Predicted TTL (adjusted): ${prediction}`);
+  return prediction;
+}
+
+export { predictLinearRegression };

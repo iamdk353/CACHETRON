@@ -25,7 +25,7 @@ if (args.includes("dashboard")) {
   const port = parseInt(process.env.PORT || "3000");
   const distPath = path.join(
     process.cwd(),
-    "node_modules/cachetron/dist/dashboard"
+    "node_modules","cachetron","dist","dashboard"
   );
 
   app.use(express.static(distPath));
@@ -42,6 +42,7 @@ if (args.includes("dashboard")) {
   const TemplateConfig = {
     backend: "redis",
     url: "redis://localhost:6379",
+    autoTTL: true
   };
 
   const filePath = path.join(process.cwd(), "cachetron.json");

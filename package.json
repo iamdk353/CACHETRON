@@ -12,7 +12,7 @@
   ],
   "scripts": {
     
-    "link": "tsc && cd dashboard && npm run build && rm -rf ../dist/dashboard && cp -r dist ../dist/dashboard && cd ../ && cp ./src/ml/linear_regression_ttl.onnx ./dist/ml/linear_regression_ttl.onnx && npm link",
+    "link": "tsc && cd dashboard && npm run build && rm -rf ../dist/dashboard && cp -r dist ../dist/dashboard &&  npm link",
     "publish-package": "npm run build && npm login && npm publish"
   },
   "bin": {

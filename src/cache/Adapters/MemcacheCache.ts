@@ -2,16 +2,18 @@ import Memcached from "memcached";
 import { Cache } from "../Interface/Cache";
 import logger from "../../utils/logger";
 import { getLatestMLMetrics } from "../../utils/Monitor";
-import predictTTL from "../../ml/prediction";
-
+import { predictLinearRegression } from "../../ml/prediction";
+import path from "path";
+const CONFIG_PATH = path.join(process.cwd(), "cachetron.json");
+import fs from "fs";
 interface CacheChartData {
   time: string;
-  hitRatio: number;           // Recent hit ratio (since last check)
-  missRatio: number;          // Recent miss ratio (since last check)
-  hitRatioLifetime: number;   // Overall hit ratio (lifetime)
-  missRatioLifetime: number;  // Overall miss ratio (lifetime)
-  cacheSize: number;          // in MB
-  dataChangeRate: number;     // per minute
+  hitRatio: number; // Recent hit ratio (since last check)
+  missRatio: number; // Recent miss ratio (since last check)
+  hitRatioLifetime: number; // Overall hit ratio (lifetime)
+  missRatioLifetime: number; // Overall miss ratio (lifetime)
+  cacheSize: number; // in MB
+  dataChangeRate: number; // per minute
 }
 
 export class MemcacheCache implements Cache {
@@ -66,21 +68,20 @@ export class MemcacheCache implements Cache {
       });
     });
   }
-
+  loadAutoTTL(): { autoTTL: boolean } {
+    if (!fs.existsSync(CONFIG_PATH)) throw new Error(`Config file not found`);
+    const data = fs.readFileSync(CONFIG_PATH, "utf8");
+    console.log(`[Redis][ML] Loaded config: ${data}`);
+    return JSON.parse(data).autoTTL;
+  }
   async set(key: string, value: any, ttl = 0): Promise<void> {
     await this.ensureConnected();
-    const mlMetric= getLatestMLMetrics();
-        if( mlMetric.length!==4){
-          ttl=ttl;
-          logger.info(`[MemCache]{ML} Set key '${key}' with ttl Default ${ttl}`);
-        }
-        else{
-          const predictedTTl=await predictTTL(mlMetric)
-          if(predictedTTl && predictedTTl>0){
-            ttl=Math.floor(predictedTTl);
-            logger.info(`[MemCache]{ML} Set key '${key}' with ttl Predicted ${ttl}`);
-          }
-        }
+    const mlMetric = getLatestMLMetrics();
+    if(this.loadAutoTTL()){
+      ttl = predictLinearRegression(mlMetric);
+      logger.info(`[MemcacheCache][ML] Predicted TTL for key '${key}': ${ttl}`);
+    }
+
     const serialized = this.serialize(value);
     logger.debug(`[MemcacheCache] set called for key: ${key}, ttl: ${ttl}`);
     return new Promise((resolve, reject) => {
@@ -179,7 +180,7 @@ export class MemcacheCache implements Cache {
         try {
           const stats = this.parseMemcacheStats(serverStats);
           const metrics = this.calculateMetrics(stats);
-          
+
           logger.info(`[MemcacheCache] Metrics collected successfully`);
           resolve(metrics);
         } catch (error) {
@@ -199,7 +200,7 @@ export class MemcacheCache implements Cache {
     // Handle array format
     if (Array.isArray(serverStats)) {
       const first = serverStats[0];
-      
+
       // Case 1: { server, stats: {...} }
       if (first?.stats && typeof first.stats === "object") {
         stats = first.stats;
@@ -209,7 +210,7 @@ export class MemcacheCache implements Cache {
         const { server, ...rest } = first;
         stats = rest;
       }
-    } 
+    }
     // Handle object format: { "localhost:11211": {...} }
     else if (serverStats && typeof serverStats === "object") {
       const keys = Object.keys(serverStats);
@@ -240,7 +241,7 @@ export class MemcacheCache implements Cache {
     const hitsDelta = Math.max(0, getHits - this.previousStats.getHits);
     const missesDelta = Math.max(0, getMisses - this.previousStats.getMisses);
     const totalDelta = hitsDelta + missesDelta;
-    
+
     // Use incremental values for recent performance
     const hitRatio = totalDelta > 0 ? hitsDelta / totalDelta : 0;
     const missRatio = totalDelta > 0 ? missesDelta / totalDelta : 0;
@@ -256,8 +257,12 @@ export class MemcacheCache implements Cache {
     // Calculate eviction rate (per minute)
     const now = Date.now();
     const minutesPassed = (now - this.previousStats.lastCheckTime) / 60000;
-    const evictionsDelta = Math.max(0, evictions - this.previousStats.evictions);
-    const dataChangeRate = minutesPassed > 0 ? evictionsDelta / minutesPassed : 0;
+    const evictionsDelta = Math.max(
+      0,
+      evictions - this.previousStats.evictions
+    );
+    const dataChangeRate =
+      minutesPassed > 0 ? evictionsDelta / minutesPassed : 0;
 
     // Update previous stats for next interval
     this.previousStats = {

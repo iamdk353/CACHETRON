@@ -4,21 +4,36 @@ interface CacheChartData {
   missRatio: number;
   cacheSize: number; // in MB
   dataChangeRate: number; // per minute
+  hitRatioLifetime: number;
+  missRatioLifetime: number;
 }
 
+interface MLCacheMetrics {
+  hitRatioLifetime: number;
+  missRatioLifetime: number;
+  cacheSize: number;
+  dataChangeRate: number;
+  ttl?: number;
+}
 
 import fs from "fs";
 import path from "path";
 import { cachetron } from "../cache/factory";
 
-const METRICS_FILE = path.join(process.cwd(),
-      "node_modules",
-      "cachetron",
-      "data",
-      "metric.json"
-    );
+const METRICS_FILE = path.join(
+  process.cwd(),
+  "node_modules",
+  "cachetron",
+  "data",
+  "metric.json"
+);
 
-let ML_Metrics=[0,0,0,0];
+let ML_Metrics: MLCacheMetrics = {
+  hitRatioLifetime: 0,
+  missRatioLifetime: 0,
+  cacheSize: 0,
+  dataChangeRate: 0,
+};
 
 export const startMetricsCollection = () => {
   setInterval(async () => {
@@ -45,7 +60,12 @@ export const startMetricsCollection = () => {
 
       // Append new stats
       allMetrics.push(stats);
-      ML_Metrics=[stats.hitRatio, stats.missRatio, stats.cacheSize, stats.dataChangeRate];
+      ML_Metrics = {
+        hitRatioLifetime: stats.hitRatioLifetime,
+        missRatioLifetime: stats.missRatioLifetime,
+        cacheSize: stats.cacheSize,
+        dataChangeRate: stats.dataChangeRate,
+      };
 
       // Save back to file as JSON array
       fs.writeFileSync(METRICS_FILE, JSON.stringify(allMetrics, null, 2));
@@ -54,13 +74,25 @@ export const startMetricsCollection = () => {
     } catch (err) {
       console.error("[Metrics] Error collecting metrics:", err);
     }
-  }, 5_000); 
+  }, 5_000);
 };
-export function getLatestMLMetrics():number[]{
-  if(ML_Metrics.length===4){
-    return ML_Metrics;
+
+export function getLatestMLMetrics(): MLCacheMetrics {
+  const rawData = fs.readFileSync(METRICS_FILE, "utf-8");
+  const metrics = JSON.parse(rawData);
+
+  // Check if it's an array and access the last element
+  if (Array.isArray(metrics) && metrics.length > 0) {
+    const lastMetric = metrics[metrics.length - 1];
+    console.log("✅ Last JSON entry:", lastMetric);
+    return lastMetric as MLCacheMetrics;
+  } else {
+    console.error("❌ The file does not contain a valid array or is empty.");
+    return {
+      hitRatioLifetime: 0,
+      missRatioLifetime: 0,
+      cacheSize: 0,
+      dataChangeRate: 0,
+    };
   }
-return [0]
 }
-
-

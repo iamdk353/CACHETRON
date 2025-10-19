@@ -2,8 +2,13 @@ import { createClient, RedisClientType } from "redis";
 import { Cache } from "../Interface/Cache";
 import logger from "../../utils/logger";
 import { getLatestMLMetrics } from "../../utils/Monitor";
-import predictTTL from "../../ml/prediction";
+import { predictLinearRegression } from "../../ml/prediction";
+import path from "path";
+import fs from "fs";
 
+const CONFIG_PATH = path.join(process.cwd(), "cachetron.json");
+
+// --- Load config ---
 
 export interface CacheChartData {
   time: string;
@@ -21,7 +26,7 @@ export interface EnhancedCacheMetrics {
   timestamp: string;
   cacheKey?: string;
   dataType?: string;
-  
+
   currentMetrics: {
     hitRatio: number;
     missRatio: number;
@@ -29,7 +34,7 @@ export interface EnhancedCacheMetrics {
     itemCount: number;
     avgItemSize: number;
   };
-  
+
   lifetimeMetrics: {
     hitRatioLifetime: number;
     missRatioLifetime: number;
@@ -37,7 +42,7 @@ export interface EnhancedCacheMetrics {
     totalHits: number;
     totalMisses: number;
   };
-  
+
   accessPatterns: {
     requestFrequency: number;
     lastAccessTime: string;
@@ -47,7 +52,7 @@ export interface EnhancedCacheMetrics {
     peakHourAccess: number;
     offPeakHourAccess: number;
   };
-  
+
   dataCharacteristics: {
     dataAge: number;
     dataChangeRate: number;
@@ -55,14 +60,14 @@ export interface EnhancedCacheMetrics {
     updateFrequency: number;
     volatilityScore: number;
   };
-  
+
   performanceMetrics: {
     avgCacheFetchTime: number;
     avgSourceFetchTime: number;
     evictionCount: number;
     refreshCount: number;
   };
-  
+
   temporalFeatures: {
     hourOfDay: number;
     dayOfWeek: number;
@@ -70,13 +75,13 @@ export interface EnhancedCacheMetrics {
     isBusinessHours: boolean;
     seasonalIndex: number;
   };
-  
+
   costMetrics: {
     cacheCostPerHour: number;
     missLatencyCost: number;
     storageCost: number;
   };
-  
+
   targetVariable?: {
     optimalTTL: number;
     previousTTL: number;
@@ -89,12 +94,12 @@ interface EnhancedPreviousStats {
   keyspaceMisses: number;
   evictedKeys: number;
   lastCheckTime: number;
-  
+
   // Additional tracking for access patterns
   accessHistory: Array<{ timestamp: number; hits: number; misses: number }>;
   hourlyAccessCounts: Map<number, number>;
   dailyAccessCounts: Map<string, number>;
-  
+
   // Performance tracking
   fetchTimeSamples: number[];
   evictionHistory: Array<{ timestamp: number; count: number }>;
@@ -114,7 +119,7 @@ export class RedisCache implements Cache {
     hourlyAccessCounts: new Map(),
     dailyAccessCounts: new Map(),
     fetchTimeSamples: [],
-    evictionHistory: []
+    evictionHistory: [],
   };
 
   constructor(url: string) {
@@ -141,33 +146,39 @@ export class RedisCache implements Cache {
       return null;
     }
   }
-
+  loadAutoTTL(): { autoTTL: boolean } {
+    if (!fs.existsSync(CONFIG_PATH)) throw new Error(`Config file not found`);
+    const data = fs.readFileSync(CONFIG_PATH, "utf8");
+    console.log(`[Redis][ML] Loaded config: ${data}`);
+    return JSON.parse(data).autoTTL;
+  }
   async set(key: string, value: any, ttl?: number) {
     await this.ensureConnected();
-    const mlMetric= getLatestMLMetrics();
-    if( mlMetric.length!==4){
-      ttl=ttl;
-      logger.info(`[RedisCache]{ML} Set key '${key}' with ttl Default ${ttl}`);
-    }
-    else{
-      const predictedTTl=await predictTTL(mlMetric)
-      if(predictedTTl && predictedTTl>0){
-        ttl=Math.floor(predictedTTl);
-        logger.info(`[RedisCache]{ML} Set key '${key}' with ttl Predicted ${ttl}`);
+    const mlMetric = getLatestMLMetrics();
+      logger.debug(`[RedisCache] set called for key: ${key}, ttl: ${ttl}`);
+      try {
+        const serialized = JSON.stringify(value);
+        if (ttl) {
+          await this.client.set(key, serialized, { EX: ttl });
+        } else {
+          if(this.loadAutoTTL()) {
+            logger.info(`[RedisCache]{ML} Auto TTL is enabled`);
+            const predictedTTl = predictLinearRegression(mlMetric);
+            if (predictedTTl && predictedTTl > 0) {
+              ttl = predictedTTl;
+              logger.info(
+                `[RedisCache]{ML} Set key '${key}' with ttl Predicted ${ttl}`
+              );
+            }
+            await this.client.set(key, serialized, { EX: ttl });
+          }else{
+            await this.client.set(key, serialized);
+            logger.info(`[RedisCache] Set key '${key}' with ttl ${ttl}`);
+          }
+        }
+      } catch (err) {
+        logger.error(`[RedisCache] Error setting key '${key}': ${err}`);
       }
-    }
-    logger.debug(`[RedisCache] set called for key: ${key}, ttl: ${ttl}`);
-    try {
-      const serialized = JSON.stringify(value);
-      if (ttl) {
-        await this.client.set(key, serialized, { EX: ttl });
-      } else {
-        await this.client.set(key, serialized);
-      }
-      logger.info(`[RedisCache] Set key '${key}' with ttl ${ttl}`);
-    } catch (err) {
-      logger.error(`[RedisCache] Error setting key '${key}': ${err}`);
-    }
   }
 
   async delete(key: string) {
@@ -229,7 +240,7 @@ export class RedisCache implements Cache {
    */
   async getCacheMetrics(): Promise<CacheChartData> {
     await this.ensureConnected();
-    
+
     try {
       const info = await this.client.info();
       const infoData = this.parseRedisInfo(info);
@@ -242,21 +253,33 @@ export class RedisCache implements Cache {
       const keyspaceMisses = this.safeNumber(infoData["keyspace_misses"]);
       const evictedKeys = this.safeNumber(infoData["evicted_keys"]);
 
-      const hitsDelta = Math.max(0, keyspaceHits - this.previousStats.keyspaceHits);
-      const missesDelta = Math.max(0, keyspaceMisses - this.previousStats.keyspaceMisses);
+      const hitsDelta = Math.max(
+        0,
+        keyspaceHits - this.previousStats.keyspaceHits
+      );
+      const missesDelta = Math.max(
+        0,
+        keyspaceMisses - this.previousStats.keyspaceMisses
+      );
       const totalDelta = hitsDelta + missesDelta;
-      
+
       const hitRatio = totalDelta > 0 ? hitsDelta / totalDelta : 0;
       const missRatio = totalDelta > 0 ? missesDelta / totalDelta : 0;
 
       const totalLifetime = keyspaceHits + keyspaceMisses;
-      const hitRatioLifetime = totalLifetime > 0 ? keyspaceHits / totalLifetime : 0;
-      const missRatioLifetime = totalLifetime > 0 ? keyspaceMisses / totalLifetime : 0;
+      const hitRatioLifetime =
+        totalLifetime > 0 ? keyspaceHits / totalLifetime : 0;
+      const missRatioLifetime =
+        totalLifetime > 0 ? keyspaceMisses / totalLifetime : 0;
 
       const now = Date.now();
       const minutesPassed = (now - this.previousStats.lastCheckTime) / 60000;
-      const evictionsDelta = Math.max(0, evictedKeys - this.previousStats.evictedKeys);
-      const dataChangeRate = minutesPassed > 0 ? evictionsDelta / minutesPassed : 0;
+      const evictionsDelta = Math.max(
+        0,
+        evictedKeys - this.previousStats.evictedKeys
+      );
+      const dataChangeRate =
+        minutesPassed > 0 ? evictionsDelta / minutesPassed : 0;
 
       // Update tracking for enhanced metrics
       this.updateAccessHistory(now, hitsDelta, missesDelta, evictionsDelta);
@@ -278,9 +301,10 @@ export class RedisCache implements Cache {
         avgKeySize: this.safePrecision(avgKeySize, 0),
       };
 
-      logger.info(`[RedisCache] Metrics collected - Keys: ${dbSize}, Size: ${metrics.cacheSize}MB`);
+      logger.info(
+        `[RedisCache] Metrics collected - Keys: ${dbSize}, Size: ${metrics.cacheSize}MB`
+      );
       return metrics;
-
     } catch (err) {
       logger.error(`[RedisCache] Error collecting metrics: ${err}`);
       throw err;
@@ -290,179 +314,6 @@ export class RedisCache implements Cache {
   /**
    * Collect comprehensive cache metrics for ML model training
    */
-  async getEnhancedMetrics(): Promise<EnhancedCacheMetrics> {
-    await this.ensureConnected();
-    
-    try {
-      const now = Date.now();
-      const nowDate = new Date(now);
-      
-      const info = await this.client.info();
-      const infoData = this.parseRedisInfo(info);
-
-      const dbSize = await this.client.dbSize();
-      const usedMemory = this.safeNumber(infoData["used_memory"]);
-      const avgKeySize = dbSize > 0 ? usedMemory / dbSize : 0;
-
-      const keyspaceHits = this.safeNumber(infoData["keyspace_hits"]);
-      const keyspaceMisses = this.safeNumber(infoData["keyspace_misses"]);
-      const evictedKeys = this.safeNumber(infoData["evicted_keys"]);
-
-      // === CURRENT METRICS (Incremental) ===
-      const hitsDelta = Math.max(0, keyspaceHits - this.previousStats.keyspaceHits);
-      const missesDelta = Math.max(0, keyspaceMisses - this.previousStats.keyspaceMisses);
-      const totalDelta = hitsDelta + missesDelta;
-      
-      const hitRatio = totalDelta > 0 ? hitsDelta / totalDelta : 0;
-      const missRatio = totalDelta > 0 ? missesDelta / totalDelta : 0;
-
-      // === LIFETIME METRICS ===
-      const totalLifetime = keyspaceHits + keyspaceMisses;
-      const hitRatioLifetime = totalLifetime > 0 ? keyspaceHits / totalLifetime : 0;
-      const missRatioLifetime = totalLifetime > 0 ? keyspaceMisses / totalLifetime : 0;
-
-      // === ACCESS PATTERNS ===
-      const minutesPassed = (now - this.previousStats.lastCheckTime) / 60000;
-      const requestFrequency = minutesPassed > 0 ? totalDelta / minutesPassed : 0;
-      
-      // Calculate 24h and 7d access counts
-      const oneDayAgo = now - (24 * 60 * 60 * 1000);
-      const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000);
-      
-      const accessCount24h = this.previousStats.accessHistory
-        .filter(h => h.timestamp >= oneDayAgo)
-        .reduce((sum, h) => sum + h.hits + h.misses, 0);
-      
-      const accessCount7d = this.previousStats.accessHistory
-        .filter(h => h.timestamp >= sevenDaysAgo)
-        .reduce((sum, h) => sum + h.hits + h.misses, 0);
-
-      const avgTimeBetweenAccess = requestFrequency > 0 ? 60 / requestFrequency : 0;
-
-      // Update hourly access tracking
-      const currentHour = nowDate.getHours();
-      this.previousStats.hourlyAccessCounts.set(
-        currentHour,
-        (this.previousStats.hourlyAccessCounts.get(currentHour) || 0) + totalDelta
-      );
-
-      const hourlyValues = Array.from(this.previousStats.hourlyAccessCounts.values());
-      const peakHourAccess = hourlyValues.length > 0 ? Math.max(...hourlyValues) : 0;
-      const offPeakHourAccess = hourlyValues.length > 0 ? Math.min(...hourlyValues) : 0;
-
-      // === DATA CHARACTERISTICS ===
-      const evictionsDelta = Math.max(0, evictedKeys - this.previousStats.evictedKeys);
-      const dataChangeRate = minutesPassed > 0 ? evictionsDelta / minutesPassed : 0;
-
-      // Calculate volatility score
-      const recentEvictions = this.previousStats.evictionHistory
-        .slice(-60)
-        .map(e => e.count);
-      const volatilityScore = this.calculateVolatility(recentEvictions);
-
-      // Estimate data age
-      const avgEvictionRate = this.previousStats.evictionHistory.length > 0
-        ? this.previousStats.evictionHistory.reduce((sum, e) => sum + e.count, 0) / this.previousStats.evictionHistory.length
-        : 0;
-      const estimatedDataAge = avgEvictionRate > 0 ? (dbSize / avgEvictionRate) * 60 : 86400;
-
-      // === PERFORMANCE METRICS ===
-      const opsPerSec = this.safeNumber(infoData["instantaneous_ops_per_sec"]);
-      const avgCacheFetchTime = opsPerSec > 0 ? 1000 / opsPerSec : 2.0;
-      const avgSourceFetchTime = avgCacheFetchTime * 75;
-
-      // === TEMPORAL FEATURES ===
-      const hourOfDay = nowDate.getHours();
-      const dayOfWeek = nowDate.getDay();
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-      const isBusinessHours = hourOfDay >= 9 && hourOfDay < 17 && !isWeekend;
-      const seasonalIndex = isBusinessHours ? 1.3 : (isWeekend ? 0.8 : 1.0);
-
-      // === COST METRICS ===
-      const cacheSizeMB = usedMemory / (1024 * 1024);
-      const cacheCostPerHour = cacheSizeMB * 0.0001;
-      const missLatencyCost = avgSourceFetchTime / 100;
-      const storageCost = avgKeySize / (1024 * 1024) * 0.0001;
-
-      // Update tracking
-      this.updateAccessHistory(now, hitsDelta, missesDelta, evictionsDelta);
-      this.previousStats.keyspaceHits = keyspaceHits;
-      this.previousStats.keyspaceMisses = keyspaceMisses;
-      this.previousStats.evictedKeys = evictedKeys;
-      this.previousStats.lastCheckTime = now;
-
-      const metrics: EnhancedCacheMetrics = {
-        timestamp: nowDate.toISOString(),
-        dataType: "cache_aggregate",
-        
-        currentMetrics: {
-          hitRatio: this.safePrecision(hitRatio, 3),
-          missRatio: this.safePrecision(missRatio, 3),
-          cacheSize: this.safePrecision(cacheSizeMB, 2),
-          itemCount: dbSize,
-          avgItemSize: this.safePrecision(avgKeySize / 1024, 2)
-        },
-        
-        lifetimeMetrics: {
-          hitRatioLifetime: this.safePrecision(hitRatioLifetime, 3),
-          missRatioLifetime: this.safePrecision(missRatioLifetime, 3),
-          totalRequests: totalLifetime,
-          totalHits: keyspaceHits,
-          totalMisses: keyspaceMisses
-        },
-        
-        accessPatterns: {
-          requestFrequency: this.safePrecision(requestFrequency, 2),
-          lastAccessTime: nowDate.toISOString(),
-          accessCount24h: accessCount24h,
-          accessCount7d: accessCount7d,
-          avgTimeBetweenAccess: this.safePrecision(avgTimeBetweenAccess, 2),
-          peakHourAccess: peakHourAccess,
-          offPeakHourAccess: offPeakHourAccess
-        },
-        
-        dataCharacteristics: {
-          dataAge: Math.floor(estimatedDataAge),
-          dataChangeRate: this.safePrecision(dataChangeRate, 2),
-          lastModified: new Date(now - estimatedDataAge * 1000).toISOString(),
-          updateFrequency: Math.floor(estimatedDataAge),
-          volatilityScore: this.safePrecision(volatilityScore, 2)
-        },
-        
-        performanceMetrics: {
-          avgCacheFetchTime: this.safePrecision(avgCacheFetchTime, 2),
-          avgSourceFetchTime: this.safePrecision(avgSourceFetchTime, 2),
-          evictionCount: evictedKeys,
-          refreshCount: Math.floor(evictedKeys * 0.7)
-        },
-        
-        temporalFeatures: {
-          hourOfDay: hourOfDay,
-          dayOfWeek: dayOfWeek,
-          isWeekend: isWeekend,
-          isBusinessHours: isBusinessHours,
-          seasonalIndex: this.safePrecision(seasonalIndex, 2)
-        },
-        
-        costMetrics: {
-          cacheCostPerHour: this.safePrecision(cacheCostPerHour, 4),
-          missLatencyCost: this.safePrecision(missLatencyCost, 2),
-          storageCost: this.safePrecision(storageCost, 6)
-        }
-      };
-
-      logger.info(
-        `[RedisCache] Enhanced metrics - Keys: ${dbSize}, Size: ${cacheSizeMB.toFixed(2)}MB, ` +
-        `Hit: ${(hitRatio * 100).toFixed(1)}%, Freq: ${requestFrequency.toFixed(1)}/min`
-      );
-      
-      return metrics;
-
-    } catch (err) {
-      logger.error(`[RedisCache] Error collecting enhanced metrics: ${err}`);
-      throw err;
-    }
-  }
 
   /**
    * Update access history tracking
@@ -491,11 +342,13 @@ export class RedisCache implements Cache {
    */
   private calculateVolatility(values: number[]): number {
     if (values.length < 2) return 0;
-    
+
     const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
-    const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+    const variance =
+      values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
+      values.length;
     const stdDev = Math.sqrt(variance);
-    
+
     return mean > 0 ? Math.min(stdDev / mean, 1) : 0;
   }
 
@@ -505,7 +358,7 @@ export class RedisCache implements Cache {
   private parseRedisInfo(info: string): Record<string, string> {
     const data: Record<string, string> = {};
 
-    info.split("\n").forEach(line => {
+    info.split("\n").forEach((line) => {
       line = line.trim();
       if (!line || line.startsWith("#")) {
         return;
@@ -538,4 +391,3 @@ export class RedisCache implements Cache {
     return Number(value.toFixed(decimals));
   }
 }
-

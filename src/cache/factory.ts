@@ -10,7 +10,7 @@ const CONFIG_PATH = path.join(process.cwd(), "cachetron.json");
 let reloadTimeout: NodeJS.Timeout | null = null;
 
 // --- Load config ---
-function loadCacheConfig(): { type: string; url: string } {
+export function loadCacheConfig(): { type: string; url: string,autoTTL?:boolean } {
   if (!fs.existsSync(CONFIG_PATH)) throw new Error(`Config file not found`);
   const data = fs.readFileSync(CONFIG_PATH, "utf8");
   console.log(`[CacheFactory] Loaded config: ${data}`);

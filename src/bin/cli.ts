@@ -40,7 +40,7 @@ if (args.includes("dashboard")) {
 } else if (args.includes("init")) {
   PrintAsci("Cachetron");
   const TemplateConfig = {
-    backend: "redis",
+    type: "redis",
     url: "redis://localhost:6379",
     autoTTL:true,
   };

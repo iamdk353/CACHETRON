@@ -1,6 +1,6 @@
 {
   "name": "cachetron",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "A simple cache abstraction for Node.js supporting Redis and Memcache, with in-depth logging.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

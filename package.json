@@ -11,7 +11,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && cd dashboard && npm run build && rm -rf ../dist/dashboard && cp -r dist ../dist/dashboard",
+    "build": "tsc && cd dashboard && npm i && npm run build && rm -rf ../dist/dashboard && cp -r dist ../dist/dashboard",
     "link": "npm run build && npm link",
     "prepare": "npm run build",
     "publish-package": "npm run build && npm login && npm publish"

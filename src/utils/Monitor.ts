@@ -24,7 +24,8 @@ const METRICS_FILE = path.join(
   process.cwd(),
   "node_modules",
   "cachetron",
-  "data",
+  "dist",
+  "dashboard",
   "metric.json"
 );
 

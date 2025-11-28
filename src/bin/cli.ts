@@ -4,6 +4,8 @@ import fs from "fs";
 import path from "path";
 import express, { Request, Response, NextFunction } from "express";
 import morgon from "morgan";
+import http from "http";
+import { WebSocketServer } from "ws";
 import figlet from "figlet";
 // React build inside installed package
 
@@ -21,6 +23,7 @@ Options:
 }
 
 if (args.includes("dashboard")) {
+  PrintAsci("Cachetron");
   const app = express();
   const port = parseInt(process.env.PORT || "3000");
   const distPath = path.join(
@@ -28,13 +31,39 @@ if (args.includes("dashboard")) {
     "node_modules/cachetron/dist/dashboard"
   );
 
+  // Serve dashboard UI
   app.use(express.static(distPath));
-
   app.get("/", (req: Request, res: Response) => {
     res.sendFile(path.join(distPath, "index.html"));
   });
 
-  app.listen(port, () =>
+  // Create shared HTTP server
+  const server = http.createServer(app);
+
+  // Attach WebSocket server
+  const wss = new WebSocketServer({ server });
+
+  console.log("WebSocket server attached for live metrics");
+
+  // Send metrics on connect
+  wss.on("connection", (ws) => {
+    try {
+      const data = fs.readFileSync(path.join(distPath, "metric.json"), "utf8");
+      ws.send(data);
+    } catch (e) {}
+  });
+
+  // Watch for metric.json changes
+  fs.watch(path.join(distPath, "metric.json"), () => {
+    const data = fs.readFileSync(path.join(distPath, "metric.json"), "utf8");
+
+    wss.clients.forEach((client) => {
+      if (client.readyState === 1) client.send(data);
+    });
+  });
+
+  // Start combined server
+  server.listen(port, () =>
     console.log(`Dashboard running at http://localhost:${port}`)
   );
 } else if (args.includes("init")) {
@@ -42,7 +71,7 @@ if (args.includes("dashboard")) {
   const TemplateConfig = {
     type: "redis",
     url: "redis://localhost:6379",
-    autoTTL:true,
+    autoTTL: true,
   };
 
   const filePath = path.join(process.cwd(), "cachetron.json");
@@ -60,7 +89,7 @@ if (args.includes("dashboard")) {
   showHelp();
 }
 
-async function PrintAsci(params: string) {
+export async function PrintAsci(params: string) {
   const text = await figlet.text(params);
   console.log(text);
 }

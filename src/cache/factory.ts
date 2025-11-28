@@ -10,7 +10,11 @@ const CONFIG_PATH = path.join(process.cwd(), "cachetron.json");
 let reloadTimeout: NodeJS.Timeout | null = null;
 
 // --- Load config ---
-export function loadCacheConfig(): { type: string; url: string,autoTTL?:boolean } {
+export function loadCacheConfig(): {
+  type: string;
+  url: string;
+  autoTTL?: boolean;
+} {
   if (!fs.existsSync(CONFIG_PATH)) throw new Error(`Config file not found`);
   const data = fs.readFileSync(CONFIG_PATH, "utf8");
   console.log(`[CacheFactory] Loaded config: ${data}`);
@@ -20,7 +24,6 @@ export function loadCacheConfig(): { type: string; url: string,autoTTL?:boolean 
 // --- Create cache instance ---
 function createCacheInstance(config: { type: string; url: string }): Cache {
   const { type, url } = config;
-  if (!type || !url) throw new Error("Cache config missing 'type' or 'url'");
   switch (type.toLowerCase()) {
     case "redis":
       return new RedisCache(url);
@@ -31,10 +34,10 @@ function createCacheInstance(config: { type: string; url: string }): Cache {
   }
 }
 
-// --- Migrate data from old cache to new cache ---
+// --- Migrate data ---
 async function migrateCache(oldCache: Cache, newCache: Cache) {
   try {
-    const keys = await oldCache.keys(); // must be implemented in both caches
+    const keys = await oldCache.keys();
     for (const key of keys) {
       const value = await oldCache.get(key);
       if (value !== null) await newCache.set(key, value);
@@ -45,7 +48,7 @@ async function migrateCache(oldCache: Cache, newCache: Cache) {
   }
 }
 
-// --- Cleanup old cache ---
+// --- Cleanup ---
 async function cleanupCache() {
   if (!cacheInstance) return;
   if (
@@ -62,7 +65,7 @@ async function cleanupCache() {
   cacheInstance = null;
 }
 
-// --- Watcher setup with debounce ---
+// --- Watch config file ---
 function watchConfigFile() {
   fs.watch(CONFIG_PATH, { persistent: true }, (eventType) => {
     if (eventType === "change") {
@@ -78,10 +81,13 @@ function watchConfigFile() {
             console.log("[CacheFactory] Config changed, migrating cache...");
             const oldCache = cacheInstance;
             const newCache = createCacheInstance(newConfig);
+
             if (oldCache) await migrateCache(oldCache, newCache);
             await cleanupCache();
+
             cacheInstance = newCache;
             currentConfig = newConfig;
+
             console.log(`[CacheFactory] Now using ${newConfig.type} cache`);
           }
         } catch (err) {
@@ -92,12 +98,22 @@ function watchConfigFile() {
   });
 }
 
-// --- Exported factory ---
+// --- Factory ---
 export function cachetron(): Cache {
   if (cacheInstance) return cacheInstance;
+
   const config = loadCacheConfig();
   currentConfig = config;
+
   cacheInstance = createCacheInstance(config);
   watchConfigFile();
+
   return cacheInstance;
 }
+
+export const cache = new Proxy({} as Cache, {
+  get(_, prop: keyof Cache) {
+    const instance = cachetron();
+    return instance[prop].bind(instance);
+  },
+});

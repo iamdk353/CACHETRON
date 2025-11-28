@@ -54,45 +54,52 @@ export default function Dashboard() {
   const [chartData, setChartData] = useState<any[]>([]);
   const [timeRange, setTimeRange] = useState("1h");
   useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch("/metric.json?ts=" + Date.now());
-        const data = await res.json();
+    let ws: WebSocket;
 
-        if (!Array.isArray(data) || data.length === 0) return;
+    const connect = () => {
+      ws = new WebSocket("ws://localhost:3000");
 
-        const latest = data[data.length - 1];
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (!Array.isArray(data) || data.length === 0) return;
 
-        const hits = latest.hitRatio;
-        const misses = latest.missRatio;
-        const ratio = latest.hitRatioLifetime;
-        const memory = latest.cacheSize;
+          const latest = data[data.length - 1];
 
-        setMetrics({
-          cacheHits: hits,
-          cacheMisses: misses,
-          hitRatio: ratio,
-          memoryUsage: memory,
-          systemStatus:
-            ratio > 70 ? "online" : ratio > 40 ? "degraded" : "offline",
-        });
+          const hits = latest.hitRatio;
+          const misses = latest.missRatio;
+          const ratio = latest.hitRatioLifetime;
+          const memory = latest.cacheSize;
 
-        setChartData((prev) => [
-          ...prev.slice(-50),
-          {
-            time: new Date(latest.time).toLocaleTimeString(),
-            hits,
-            misses,
-            ratio,
-            memory,
-          },
-        ]);
-      } catch (e) {
-        console.error("Failed to load metric.json", e);
-      }
-    }, 5000); // ← 5 seconds
+          setMetrics({
+            cacheHits: hits,
+            cacheMisses: misses,
+            hitRatio: ratio,
+            memoryUsage: memory,
+            systemStatus:
+              ratio > 70 ? "online" : ratio > 40 ? "degraded" : "offline",
+          });
 
-    return () => clearInterval(interval);
+          setChartData((prev) => [
+            ...prev.slice(-50),
+            {
+              time: new Date(latest.time).toLocaleTimeString(),
+              hits,
+              misses,
+              ratio,
+              memory,
+            },
+          ]);
+        } catch (err) {
+          console.error("WS parse error:", err);
+        }
+      };
+
+      ws.onclose = () => setTimeout(connect, 1000);
+    };
+
+    connect();
+    return () => ws?.close();
   }, []);
 
   return (

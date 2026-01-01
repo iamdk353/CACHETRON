@@ -1,5 +1,9 @@
+"use client";
+
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import useCachetronWS from "@/Hooks/useCachetronWs";
+import type { CacheMetric } from "@/Hooks/useCachetronWs";
+
 import {
   Card,
   CardContent,
@@ -16,38 +20,6 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 
-type CacheMetric = {
-  time: string;
-  hitRatio: number;
-  missRatio: number;
-  hitRatioLifetime: number;
-  missRatioLifetime: number;
-};
-
-const chartData: CacheMetric[] = [
-  {
-    time: "2025-11-30T13:49:55.929Z",
-    hitRatio: 0,
-    missRatio: 0,
-    hitRatioLifetime: 0.424,
-    missRatioLifetime: 0.576,
-  },
-  {
-    time: "2025-11-30T13:50:00.946Z",
-    hitRatio: 0,
-    missRatio: 0,
-    hitRatioLifetime: 0.424,
-    missRatioLifetime: 0.576,
-  },
-  {
-    time: "2025-11-30T13:50:05.941Z",
-    hitRatio: 0,
-    missRatio: 0,
-    hitRatioLifetime: 0.424,
-    missRatioLifetime: 0.576,
-  },
-];
-
 const chartConfig = {
   hitRatio: { label: "Hit Ratio", color: "var(--chart-1)" },
   missRatio: { label: "Miss Ratio", color: "var(--chart-2)" },
@@ -62,7 +34,8 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 function CacheRatioAreaChart() {
-  useCachetronWS();
+  const chartData: CacheMetric[] = useCachetronWS();
+
   return (
     <Card>
       <CardHeader>
@@ -72,41 +45,44 @@ function CacheRatioAreaChart() {
 
       <CardContent className="h-[70vh] overflow-hidden p-0">
         <ChartContainer config={chartConfig} className="h-full w-full">
-          <AreaChart
-            data={chartData}
-            margin={{ top: 8, right: 12, bottom: 8, left: 12 }}
-          >
+          <AreaChart data={chartData}>
             <CartesianGrid vertical={false} />
 
-            <XAxis dataKey="time" tickLine={false} axisLine={false} />
-
-            <YAxis
-              domain={[0, 1]}
-              tickFormatter={(v) => `${Math.round(v * 100)}%`}
+            <XAxis
+              dataKey="time"
+              tickFormatter={(v) =>
+                new Date(v).toLocaleTimeString("en-US", {
+                  hour12: false,
+                  minute: "2-digit",
+                  second: "2-digit",
+                })
+              }
             />
+
+            <YAxis domain={[0, 1]} tickFormatter={(v) => `${v * 100}%`} />
 
             <ChartTooltip content={<ChartTooltipContent />} />
 
             <Area
               dataKey="hitRatio"
-              fill="var(--color-hitRatio)"
               stroke="var(--color-hitRatio)"
+              fill="var(--color-hitRatio)"
             />
             <Area
               dataKey="missRatio"
-              fill="var(--color-missRatio)"
               stroke="var(--color-missRatio)"
+              fill="var(--color-missRatio)"
             />
             <Area
               dataKey="hitRatioLifetime"
-              fill="var(--color-hitRatioLifetime)"
               stroke="var(--color-hitRatioLifetime)"
+              fill="var(--color-hitRatioLifetime)"
               opacity={0.4}
             />
             <Area
               dataKey="missRatioLifetime"
-              fill="var(--color-missRatioLifetime)"
               stroke="var(--color-missRatioLifetime)"
+              fill="var(--color-missRatioLifetime)"
               opacity={0.4}
             />
 

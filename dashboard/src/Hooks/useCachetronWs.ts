@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
-type CacheMetric = {
+export type CacheMetric = {
   time: string;
   hitRatio: number;
   missRatio: number;
@@ -10,33 +10,29 @@ type CacheMetric = {
   missRatioLifetime: number;
 };
 
+const MAX_POINTS = 40;
+
 export default function useCachetronWS() {
+  const [data, setData] = useState<CacheMetric[]>([]);
+
   useEffect(() => {
     const ws = new WebSocket("ws://localhost:6789");
 
-    ws.onopen = () => {
-      console.log("[Cachetron WS] Connected");
-    };
-
     ws.onmessage = (event) => {
       try {
-        const data: CacheMetric[] = JSON.parse(event.data);
-        console.log("[Cachetron Metrics]", data);
-      } catch (err) {
-        console.error("[Cachetron WS] Invalid JSON", err);
+        const parsed: CacheMetric[] = JSON.parse(event.data);
+        const incoming = Array.isArray(parsed) ? parsed : [parsed];
+
+        setData((prev) => [...prev, ...incoming].slice(-MAX_POINTS));
+      } catch (e) {
+        console.error("Invalid WS data", e);
       }
     };
 
-    ws.onerror = (err) => {
-      console.error("[Cachetron WS] Error", err);
-    };
+    ws.onerror = (e) => console.error("WS error", e);
 
-    ws.onclose = () => {
-      console.log("[Cachetron WS] Disconnected");
-    };
-
-    return () => {
-      ws.close();
-    };
+    return () => ws.close();
   }, []);
+
+  return data;
 }

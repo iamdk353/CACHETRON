@@ -4,13 +4,7 @@ import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import useCachetronWS from "@/Hooks/useCachetronWs";
 import type { CacheMetric } from "@/Hooks/useCachetronWs";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   ChartContainer,
   ChartLegend,
@@ -19,6 +13,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import CacheMetricsTable from "./Table";
 
 const chartConfig = {
   hitRatio: { label: "Hit Ratio", color: "var(--chart-1)" },
@@ -33,64 +28,71 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-function CacheRatioAreaChart() {
+function CacheRatioAreaChart({ isPlayground }: { isPlayground?: boolean }) {
   const chartData: CacheMetric[] = useCachetronWS();
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Cachetron Control Center</CardTitle>
-        <CardDescription>Cache hit / miss ratios</CardDescription>
-      </CardHeader>
+    <div>
+      <Card>
+        <CardHeader></CardHeader>
 
-      <CardContent className="h-[70vh] overflow-hidden p-0">
-        <ChartContainer config={chartConfig} className="h-full w-full">
-          <AreaChart data={chartData}>
-            <CartesianGrid vertical={false} />
+        <CardContent
+          className={
+            isPlayground
+              ? "h-[30vh] overflow-hidden p-0"
+              : "h-[70vh] overflow-hidden p-0"
+          }
+        >
+          <ChartContainer config={chartConfig} className="h-full w-full">
+            <AreaChart data={chartData}>
+              <CartesianGrid vertical={false} />
 
-            <XAxis
-              dataKey="time"
-              tickFormatter={(v) =>
-                new Date(v).toLocaleTimeString("en-US", {
-                  hour12: false,
-                  minute: "2-digit",
-                  second: "2-digit",
-                })
-              }
-            />
+              <XAxis
+                dataKey="time"
+                tickFormatter={(v) =>
+                  new Date(v).toLocaleTimeString("en-US", {
+                    hour12: false,
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })
+                }
+              />
 
-            <YAxis domain={[0, 1]} tickFormatter={(v) => `${v * 100}%`} />
+              <YAxis domain={[0, 1]} tickFormatter={(v) => `${v * 100}%`} />
 
-            <ChartTooltip content={<ChartTooltipContent />} />
+              <ChartTooltip content={<ChartTooltipContent />} />
 
-            <Area
-              dataKey="hitRatio"
-              stroke="var(--color-hitRatio)"
-              fill="var(--color-hitRatio)"
-            />
-            <Area
-              dataKey="missRatio"
-              stroke="var(--color-missRatio)"
-              fill="var(--color-missRatio)"
-            />
-            <Area
-              dataKey="hitRatioLifetime"
-              stroke="var(--color-hitRatioLifetime)"
-              fill="var(--color-hitRatioLifetime)"
-              opacity={0.4}
-            />
-            <Area
-              dataKey="missRatioLifetime"
-              stroke="var(--color-missRatioLifetime)"
-              fill="var(--color-missRatioLifetime)"
-              opacity={0.4}
-            />
+              <Area
+                dataKey="hitRatio"
+                stroke="var(--color-hitRatio)"
+                fill="var(--color-hitRatio)"
+              />
+              <Area
+                dataKey="missRatio"
+                stroke="var(--color-missRatio)"
+                fill="var(--color-missRatio)"
+              />
+              <Area
+                dataKey="hitRatioLifetime"
+                stroke="var(--color-hitRatioLifetime)"
+                fill="var(--color-hitRatioLifetime)"
+                opacity={0.4}
+              />
+              <Area
+                dataKey="missRatioLifetime"
+                stroke="var(--color-missRatioLifetime)"
+                fill="var(--color-missRatioLifetime)"
+                opacity={0.4}
+              />
 
-            <ChartLegend content={<ChartLegendContent />} />
-          </AreaChart>
-        </ChartContainer>
-      </CardContent>
-    </Card>
+              <ChartLegend content={<ChartLegendContent />} />
+            </AreaChart>
+          </ChartContainer>
+        </CardContent>
+      </Card>
+      <p className="mx-10 mt-20">TABULATED VERSION</p>
+      <CacheMetricsTable data={chartData} />
+    </div>
   );
 }
 

@@ -2,6 +2,7 @@
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CacheChart from "./Graph";
+import Playground from "./Playground";
 
 export function Home() {
   return (
@@ -19,10 +20,13 @@ export function Home() {
           </TabsList>
         </div>
         <TabsContent value="account" className="">
+          <div className="px-10">
+            <p>Vizualize the performance of Cache System</p>
+          </div>
           <CacheChart />
         </TabsContent>
         <TabsContent value="password">
-          <p>playground contents</p>
+          <Playground />
         </TabsContent>
       </Tabs>
     </div>

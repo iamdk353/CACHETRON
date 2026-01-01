@@ -10,7 +10,7 @@ export type CacheMetric = {
   missRatioLifetime: number;
 };
 
-const MAX_POINTS = 40;
+const MAX_POINTS = 30;
 
 export default function useCachetronWS() {
   const [data, setData] = useState<CacheMetric[]>([]);

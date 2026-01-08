@@ -90,8 +90,8 @@ function CacheRatioAreaChart({ isPlayground }: { isPlayground?: boolean }) {
           </ChartContainer>
         </CardContent>
       </Card>
-      <p className="mx-10 mt-20">TABULATED VERSION</p>
-      <CacheMetricsTable data={chartData} />
+      {!isPlayground && <p className="mx-10 mt-20">TABULATED VERSION</p>}
+      {!isPlayground && <CacheMetricsTable data={chartData} />}
     </div>
   );
 }

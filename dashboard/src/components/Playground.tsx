@@ -5,6 +5,10 @@ import { Slider } from "@/components/ui/slider";
 import { Button } from "./ui/button";
 import { useState } from "react";
 import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
+import { Switch } from "./ui/switch";
+import SingleSetForm from "./SingleTest";
 
 const Playground = () => {
   const [setValue, setSetValue] = useState<number[]>([1]);
@@ -27,6 +31,27 @@ const Playground = () => {
       console.error("Request failed", e);
     }
   };
+  const [ttlEnabled, setTtlEnabled] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log({
+      type: cacheType,
+      url: cacheType === "redis" ? "redis://localhost:6379" : "127.0.0.1:11211",
+      autoTTL: ttlEnabled,
+    });
+    await fetch("http://localhost:3001/cache/admin/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: cacheType,
+        url:
+          cacheType === "redis" ? "redis://localhost:6379" : "127.0.0.1:11211",
+        autoTTL: ttlEnabled,
+      }),
+    });
+  };
+  const [cacheType, setCacheType] = useState("redis");
 
   return (
     <div>
@@ -37,7 +62,42 @@ const Playground = () => {
       <CacheRatioAreaChart isPlayground />
 
       <div className="flex justify-between p-10">
+        <div>
+          <p>Configurations</p>
+          <div>Select the Type of Cache</div>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <RadioGroup
+              value={cacheType}
+              onValueChange={setCacheType}
+              className="flex gap-6"
+            >
+              <div className="flex items-center space-x-2 my-5">
+                <RadioGroupItem value="redis" id="redis" />
+                <Label htmlFor="redis">Redis</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="memcache" id="memcached" />
+                <Label htmlFor="memcached">Memcached</Label>
+              </div>
+            </RadioGroup>
+
+            {/* TTL Toggle */}
+            <div className="flex items-center justify-between max-w-xs">
+              <Label htmlFor="ttl">SET AUTO TTL</Label>
+              <Switch
+                id="ttl"
+                checked={ttlEnabled}
+                onCheckedChange={setTtlEnabled}
+              />
+            </div>
+
+            <Button type="submit">Save</Button>
+          </form>
+        </div>
+
         {/* ---------- SET ---------- */}
+
         <div>
           <p>Simulating High-Traffic SET Requests</p>
 
@@ -103,6 +163,10 @@ const Playground = () => {
             {loadingGet ? "Sending..." : `Start ${getValue[0]} GET Requests`}
           </Button>
         </div>
+      </div>
+      <div className="p-4 bg-stone-50 spcace-y-3">
+        <div className="p-4">Testing Single Requests</div>
+        <SingleSetForm autoTTL={ttlEnabled} setAutoTTL={setTtlEnabled} />
       </div>
     </div>
   );

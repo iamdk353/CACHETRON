@@ -2,18 +2,20 @@ import fs from "fs";
 import path from "path";
 import { z } from "zod";
 
-
 export const CacheSchema = z.object({
   type: z.string().min(1, "Type must be a non-empty string"),
   url: z
     .string()
     .url("URL must be a valid URL")
     .or(
-      z.string().regex(
-        /^([\w.-]+):(\d+)$/,
-        "URL must be a valid host:port format or a valid URL"
-      )
+      z
+        .string()
+        .regex(
+          /^([\w.-]+):(\d+)$/,
+          "URL must be a valid host:port format or a valid URL"
+        )
     ),
+  autoTTL: z.boolean(),
 });
 
 export type Cache = z.infer<typeof CacheSchema>;

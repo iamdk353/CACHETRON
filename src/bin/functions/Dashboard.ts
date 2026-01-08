@@ -7,17 +7,13 @@ import { WebSocketServer } from "ws";
 
 import { Figlet } from "ascii-art";
 
-async function PrintAsci(text: string) {
+export default async function runDashboard() {
   try {
-    const out = await Figlet.text(text);
+    const out = await Figlet.text("CACHETRON");
     console.log(out);
   } catch {
-    console.log(text);
+    console.log("CACHETRON");
   }
-}
-
-export default async function runDashboard() {
-  await PrintAsci("Cachetron");
 
   const app = express();
   const port = 6789;

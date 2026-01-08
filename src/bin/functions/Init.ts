@@ -2,17 +2,13 @@ import path from "path";
 import fs from "fs";
 import { Figlet } from "ascii-art";
 
-async function PrintAsci(text: string) {
+export default async function runInit() {
   try {
-    const out = await Figlet.text(text);
+    const out = await Figlet.text("CACHETRON");
     console.log(out);
   } catch {
-    console.log(text);
+    console.log("CACHETRON");
   }
-}
-
-export default async function runInit() {
-  await PrintAsci("Cachetron");
 
   const config = {
     type: "redis",

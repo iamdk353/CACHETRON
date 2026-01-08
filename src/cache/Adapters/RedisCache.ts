@@ -155,30 +155,33 @@ export class RedisCache implements Cache {
   async set(key: string, value: any, ttl?: number) {
     await this.ensureConnected();
     const mlMetric = getLatestMLMetrics();
-      logger.debug(`[RedisCache] set called for key: ${key}, ttl: ${ttl}`);
-      try {
-        const serialized = JSON.stringify(value);
-        if (ttl) {
+    logger.debug(`[RedisCache] set called for key: ${key}, ttl: ${ttl}`);
+    try {
+      const serialized = JSON.stringify(value);
+      if (ttl) {
+        await this.client.set(key, serialized, { EX: ttl });
+        logger.info(
+          `[RedisCache]{ML} Set key '${key}' with user set ttl  ${ttl}`
+        );
+      } else {
+        if (this.loadAutoTTL()) {
+          logger.info(`[RedisCache]{ML} Auto TTL is enabled`);
+          const predictedTTl = predictLinearRegression(mlMetric);
+          if (predictedTTl && predictedTTl > 0) {
+            ttl = predictedTTl;
+            logger.info(
+              `[RedisCache]{ML} Set key '${key}' with ttl Predicted ${ttl}`
+            );
+          }
           await this.client.set(key, serialized, { EX: ttl });
         } else {
-          if(this.loadAutoTTL()) {
-            logger.info(`[RedisCache]{ML} Auto TTL is enabled`);
-            const predictedTTl = predictLinearRegression(mlMetric);
-            if (predictedTTl && predictedTTl > 0) {
-              ttl = predictedTTl;
-              logger.info(
-                `[RedisCache]{ML} Set key '${key}' with ttl Predicted ${ttl}`
-              );
-            }
-            await this.client.set(key, serialized, { EX: ttl });
-          }else{
-            await this.client.set(key, serialized);
-            logger.info(`[RedisCache] Set key '${key}' with ttl ${ttl}`);
-          }
+          await this.client.set(key, serialized);
+          logger.info(`[RedisCache] Set key '${key}' with ttl ${ttl}`);
         }
-      } catch (err) {
-        logger.error(`[RedisCache] Error setting key '${key}': ${err}`);
       }
+    } catch (err) {
+      logger.error(`[RedisCache] Error setting key '${key}': ${err}`);
+    }
   }
 
   async delete(key: string) {

@@ -5,6 +5,7 @@
 ![TypeScript](https://img.shields.io/badge/language-TypeScript-3178C6.svg)
 ![Redis](https://img.shields.io/badge/support-Redis-red.svg)
 ![Memcached](https://img.shields.io/badge/support-Memcached-green.svg)
+[![npm](https://img.shields.io/npm/v/cachetron.svg)](https://www.npmjs.com/package/cachetron)
 
 Cachetron is not just another cache wrapper. It is a **smart, adaptive caching layer** that abstracts away the complexity of Redis and Memcached while adding powerful features like **ML-powered TTL prediction**, **dynamic hot-swapping** of cache backends, and a **real-time monitoring dashboard**.
 
